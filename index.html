@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" id="viewport-meta">
+    <title>Pro Media Downloader - Thumbnails, Video & Audio</title>
+    <meta name="description" content="All-in-one YouTube tool: Download Thumbnails (Crop/Resize), Videos, and Audio. Professional, Fast, and Free.">
+
+    <!-- FRONTEND LIBRARIES -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-deep: #030014;
+            --glass-bg: rgba(17, 25, 40, 0.75);
+            --glass-border: rgba(255, 255, 255, 0.125);
+            --primary-accent: #6366f1;
+            --secondary-accent: #a855f7;
+            --text-main: #ffffff;
+            --text-muted: #94a3b8;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-deep);
+            color: var(--text-main);
+            overflow-x: hidden;
+            -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+        }
+
+        /* VANTA BACKGROUND */
+        #vanta-bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
+
+        /* MODERN GLASS CARD */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 1.5rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        /* TABS STYLING */
+        .nav-tab {
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            opacity: 0.6;
+        }
+        .nav-tab.active { opacity: 1; font-weight: 600; }
+        .nav-tab.active::after {
+            content: ''; position: absolute; bottom: -8px; left: 0; width: 100%; height: 3px;
+            background: linear-gradient(90deg, var(--primary-accent), var(--secondary-accent));
+            border-radius: 20px; box-shadow: 0 0 10px var(--primary-accent);
+        }
+
+        /* INPUT FIELD */
+        .modern-input {
+            background: rgba(0, 0, 0, 0.3);
+            border: 2px solid rgba(255,255,255,0.05);
+            transition: all 0.3s;
+            -webkit-user-select: text; user-select: text;
+        }
+        .modern-input:focus {
+            border-color: var(--primary-accent);
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
+            outline: none;
+        }
+
+        /* BUTTONS */
+        .btn-pro {
+            background: linear-gradient(135deg, var(--primary-accent), var(--secondary-accent));
+            position: relative; overflow: hidden; transition: all 0.3s ease;
+            z-index: 1;
+        }
+        .btn-pro::before {
+            content: ''; position: absolute; top: 0; left: 0; width: 0%; height: 100%;
+            background: rgba(255,255,255,0.2); transition: all 0.3s; z-index: -1;
+        }
+        .btn-pro:hover::before { width: 100%; }
+        .btn-pro:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(99, 102, 241, 0.4); }
+
+        /* NOTIFICATIONS & MODALS (Same functionality, New Design) */
+        #notification-container {
+            position: fixed; top: 24px; right: 24px; z-index: 99999;
+            display: flex; flex-direction: column; gap: 10px; pointer-events: none;
+        }
+        .notif-toast {
+            pointer-events: auto; background: rgba(15, 23, 42, 0.9);
+            border-left: 4px solid var(--primary-accent);
+            padding: 16px 20px; border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transform: translateX(100px); opacity: 0;
+            display: flex; align-items: center; gap: 12px; min-width: 300px;
+        }
+
+        /* CROP TOOL STYLES */
+        .crop-btn {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+            transition: 0.2s;
+        }
+        .crop-btn:hover { background: rgba(255,255,255,0.1); border-color: var(--secondary-accent); }
+
+        /* HIDDEN ELEMENTS FOR LOGIC */
+        #hidden-canvas { display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- Background -->
+    <div id="vanta-bg"></div>
+
+    <!-- Hidden Canvas for Cropping -->
+    <canvas id="hidden-canvas"></canvas>
+
+    <!-- Notifications -->
+    <div id="notification-container"></div>
+
+    <!-- DIRECT MODE UI (Logic preserved) -->
+    <div id="direct-mode-ui" class="fixed inset-0 z-[9000] hidden flex-col items-center justify-center bg-[#030014]">
+        <div class="glass-panel p-10 text-center max-w-md w-[90%] border-t border-indigo-500/50">
+            <div class="relative w-20 h-20 mx-auto mb-6">
+                <div class="absolute inset-0 rounded-full border-4 border-indigo-500/30 animate-pulse"></div>
+                <div class="absolute inset-0 rounded-full border-t-4 border-indigo-500 animate-spin"></div>
+                <i id="direct-icon" class="fa-solid fa-cloud-arrow-down absolute inset-0 flex items-center justify-center text-2xl text-white"></i>
+            </div>
+            <h2 id="direct-status" class="text-2xl font-bold text-white mb-2">System Processing</h2>
+            <p id="direct-desc" class="text-gray-400 mb-8">Locating high-resolution assets...</p>
+            <a href="#" id="direct-home-link" class="text-sm text-indigo-400 hover:text-white transition-colors">Return to Dashboard</a>
+        </div>
+    </div>
+
+    <!-- MAIN APP -->
+    <main id="main-content" class="relative z-10 min-h-screen flex flex-col items-center justify-start py-12 px-4 transition-opacity duration-500">
+        
+        <!-- Header -->
+        <header class="text-center mb-10" data-aos="fade-down">
+            <div class="inline-block p-2 px-4 rounded-full bg-white/5 border border-white/10 mb-4 backdrop-blur-md">
+                <span class="text-xs font-bold tracking-widest text-indigo-300 uppercase">Pro Media Tools V1.0</span>
+            </div>
+            <h1 class="text-4xl md:text-6xl font-extrabold text-white mb-4 tracking-tight">
+                Universal <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">Downloader</span>
+            </h1>
+            <p class="text-gray-400 max-w-xl mx-auto">Download High-Quality Thumbnails, Videos, and Audio from YouTube instantly. Safe, secure, and limitless.</p>
+        </header>
+
+        <!-- Main Interface Card -->
+        <div class="w-full max-w-4xl glass-panel p-1 md:p-2 mb-12" data-aos="fade-up">
+            
+            <!-- Tabs -->
+            <div class="flex items-center justify-center gap-8 md:gap-16 border-b border-white/5 p-4 mb-6">
+                <div class="nav-tab active flex items-center gap-2 text-white" onclick="switchTab('thumbnail')">
+                    <i class="fa-solid fa-image"></i> Thumbnail
+                </div>
+                <div class="nav-tab flex items-center gap-2 text-white" onclick="switchTab('video')">
+                    <i class="fa-solid fa-video"></i> Video
+                </div>
+                <div class="nav-tab flex items-center gap-2 text-white" onclick="switchTab('audio')">
+                    <i class="fa-solid fa-music"></i> Audio
+                </div>
+            </div>
+
+            <div class="p-4 md:p-8">
+                <!-- Input Area -->
+                <form id="main-form" class="flex flex-col md:flex-row gap-4 mb-8">
+                    <div class="relative flex-grow group">
+                        <i class="fa-brands fa-youtube absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-red-500 transition-colors"></i>
+                        <input type="text" id="url-input" class="modern-input w-full pl-12 pr-4 py-4 rounded-xl text-white placeholder-gray-500 bg-black/20" placeholder="Paste YouTube Link Here..." required>
+                    </div>
+                    <button type="submit" id="submit-btn" class="btn-pro px-8 py-4 rounded-xl text-white font-bold flex items-center justify-center gap-2 min-w-[160px]">
+                        <span>Analyze</span>
+                        <i id="loading-icon" class="fa-solid fa-circle-notch fa-spin hidden"></i>
+                    </button>
+                </form>
+
+                <!-- Dynamic Results Area -->
+                <div id="results-area" class="hidden min-h-[200px]">
+                    
+                    <!-- THUMBNAIL RESULTS GRID -->
+                    <div id="thumb-results" class="result-section hidden space-y-8">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-xl font-bold text-white"><i class="fa-solid fa-layer-group text-indigo-400 mr-2"></i>Available Resolutions</h3>
+                            <span class="text-xs text-gray-500 bg-white/5 px-2 py-1 rounded">Tap image to preview</span>
+                        </div>
+                        <div id="thumbnails-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                    </div>
+
+                    <!-- VIDEO RESULTS TABLE -->
+                    <div id="video-results" class="result-section hidden">
+                        <div class="text-center mb-8">
+                            <div id="vid-meta-container" class="flex flex-col items-center gap-4 mb-8">
+                                <!-- JS will inject thumb + title here -->
+                            </div>
+                            <div class="glass-panel p-6 inline-block w-full max-w-2xl bg-black/20">
+                                <h3 class="text-left text-lg font-bold text-white mb-4 border-b border-white/10 pb-2">Video Downloads</h3>
+                                <div id="video-list" class="space-y-3">
+                                    <!-- List Items -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AUDIO RESULTS TABLE -->
+                    <div id="audio-results" class="result-section hidden">
+                        <div class="text-center mb-8">
+                            <div id="audio-meta-container" class="flex flex-col items-center gap-4 mb-8"></div>
+                            <div class="glass-panel p-6 inline-block w-full max-w-2xl bg-black/20">
+                                <h3 class="text-left text-lg font-bold text-white mb-4 border-b border-white/10 pb-2">Audio Downloads</h3>
+                                <div id="audio-list" class="space-y-3">
+                                    <!-- List Items -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Empty State -->
+                <div id="empty-state" class="text-center py-12 text-gray-600">
+                    <i class="fa-solid fa-bolt text-4xl mb-4 opacity-20"></i>
+                    <p>Enter a link to start processing</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- How it Works (Modernized) -->
+        <section class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 mt-8" data-aos="fade-up" data-aos-delay="200">
+            <div class="glass-panel p-6 hover:bg-white/5 transition-colors">
+                <div class="w-12 h-12 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-400 text-xl mb-4"><i class="fa-solid fa-link"></i></div>
+                <h3 class="text-lg font-bold text-white mb-2">1. Paste Link</h3>
+                <p class="text-sm text-gray-400">Copy any video URL from YouTube app or browser.</p>
+            </div>
+            <div class="glass-panel p-6 hover:bg-white/5 transition-colors">
+                <div class="w-12 h-12 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400 text-xl mb-4"><i class="fa-solid fa-sliders"></i></div>
+                <h3 class="text-lg font-bold text-white mb-2">2. Select Format</h3>
+                <p class="text-sm text-gray-400">Choose Thumbnail quality, Resize, Video or Audio.</p>
+            </div>
+            <div class="glass-panel p-6 hover:bg-white/5 transition-colors">
+                <div class="w-12 h-12 rounded-lg bg-pink-500/20 flex items-center justify-center text-pink-400 text-xl mb-4"><i class="fa-solid fa-download"></i></div>
+                <h3 class="text-lg font-bold text-white mb-2">3. Download</h3>
+                <p class="text-sm text-gray-400">Get your file instantly. No registration required.</p>
+            </div>
+        </section>
+
+        <footer class="mt-auto py-8 text-center text-gray-500 text-sm">
+            <p>&copy; 2024 ProMedia Tools. Creator Tanjid Islam</p>
+        </footer>
+    </main>
+
+    <!-- AD MODAL (PRESERVED LOGIC) -->
+    <div id="ad-modal-overlay" class="fixed inset-0 z-[5000] flex items-center justify-center hidden bg-black/90 backdrop-blur-sm">
+        <div class="relative bg-[#0f172a] p-1 rounded-2xl shadow-2xl border border-indigo-500/50 max-w-sm w-[90%] mx-auto transform scale-100 transition-all">
+            <div id="ad-timer-btn" class="absolute -top-3 -right-3 w-10 h-10 bg-red-500 rounded-full flex items-center justify-center text-white font-bold shadow-lg z-20">
+                <span id="timer-count">5</span>
+                <i id="close-icon" class="fa-solid fa-xmark hidden"></i>
+            </div>
+            
+            <a href="https://t.me/codelibraryofficial" target="_blank" class="block rounded-xl overflow-hidden group relative">
+                <img src="https://imghost.iceiy.com/images/img_69390fc890e969.91702308.jpg" 
+                     onerror="this.src='https://5placehold.co/600x600/1e1e2e/FFF?text=Official+Sponsor&font=outfit';"
+                     alt="Ad" class="w-full aspect-square object-cover">
+                <div class="absolute bottom-0 w-full p-4 bg-gradient-to-t from-black to-transparent">
+                    <button class="w-full py-2 bg-indigo-600 rounded-lg text-white font-bold text-sm shadow-lg">Support USr</button>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- PREVIEW MODAL -->
+    <div id="preview-modal" class="fixed inset-0 z-[6000] hidden bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center">
+        <div class="relative w-full h-full p-4 flex flex-col items-center justify-center">
+            <img id="preview-image" src="" class="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl border border-white/10">
+            <button id="close-preview" class="mt-8 px-6 py-2 rounded-full border border-white/20 text-white hover:bg-white/10 transition-colors">
+                <i class="fa-solid fa-xmark mr-2"></i> Close Preview
+            </button>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollToPlugin.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.waves.min.js"></script>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        gsap.registerPlugin(ScrollToPlugin);
+        AOS.init({ once: true, duration: 800 });
+
+        // 1. VANTA BACKGROUND SETUP
+        try {
+            VANTA.WAVES({
+                el: "#vanta-bg",
+                mouseControls: true, touchControls: true, gyroControls: false,
+                minHeight: 200.00, minWidth: 200.00, scale: 1.00, scaleMobile: 1.00,
+                color: 0x0f172a, shininess: 15.00, waveHeight: 15.00, waveSpeed: 0.5, zoom: 0.65
+            });
+        } catch(e) { console.log('Vanta error', e); }
+
+        // 2. STATE & DOM ELEMENTS
+        const state = {
+            currentTab: 'thumbnail',
+            currentUrl: '',
+            videoId: null,
+            pendingDownload: null
+        };
+
+        const dom = {
+            tabs: document.querySelectorAll('.nav-tab'),
+            input: document.getElementById('url-input'),
+            form: document.getElementById('main-form'),
+            submitBtn: document.getElementById('submit-btn'),
+            loader: document.getElementById('loading-icon'),
+            btnText: document.querySelector('#submit-btn span'),
+            resultsArea: document.getElementById('results-area'),
+            emptyState: document.getElementById('empty-state'),
+            thumbResults: document.getElementById('thumb-results'),
+            videoResults: document.getElementById('video-results'),
+            audioResults: document.getElementById('audio-results'),
+            thumbsGrid: document.getElementById('thumbnails-grid'),
+            videoList: document.getElementById('video-list'),
+            audioList: document.getElementById('audio-list'),
+            vidMeta: document.getElementById('vid-meta-container'),
+            audMeta: document.getElementById('audio-meta-container'),
+            notification: document.getElementById('notification-container'),
+            previewModal: document.getElementById('preview-modal'),
+            previewImg: document.getElementById('preview-image'),
+            hiddenCanvas: document.getElementById('hidden-canvas')
+        };
+
+        // 3. UTILITIES
+        const extractVideoID = (url) => {
+            const regex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+            const match = url.match(regex);
+            return match ? match[1] : null;
+        };
+
+        const showToast = (msg, type = 'success') => {
+            const el = document.createElement('div');
+            el.className = `notif-toast ${type === 'error' ? 'border-red-500' : 'border-indigo-500'}`;
+            el.innerHTML = `<i class="fa-solid ${type === 'error' ? 'fa-circle-exclamation text-red-400' : 'fa-circle-check text-green-400'}"></i> <span class="text-white text-sm font-medium">${msg}</span>`;
+            dom.notification.appendChild(el);
+            
+            gsap.to(el, { x: 0, opacity: 1, duration: 0.4, ease: 'back.out' });
+            setTimeout(() => {
+                gsap.to(el, { x: 50, opacity: 0, duration: 0.3, onComplete: () => el.remove() });
+            }, 3000);
+        };
+
+        // 4. TAB LOGIC
+        window.switchTab = (tabName) => {
+            state.currentTab = tabName;
+            dom.tabs.forEach(t => t.classList.remove('active'));
+            document.querySelector(`.nav-tab[onclick="switchTab('${tabName}')"]`).classList.add('active');
+            
+            // If data exists, re-render view
+            if (state.videoId) {
+                renderResults();
+            }
+        };
+
+        // 5. CORE LOGIC
+        dom.form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const url = dom.input.value.trim();
+            const videoId = extractVideoID(url);
+
+            if (!videoId) {
+                showToast('Invalid YouTube URL', 'error');
+                return;
+            }
+
+            state.currentUrl = url;
+            state.videoId = videoId;
+
+            // Loading UI
+            dom.btnText.textContent = 'Processing...';
+            dom.loader.classList.remove('hidden');
+            dom.submitBtn.disabled = true;
+
+            // Simulate API delay for UX
+            await new Promise(r => setTimeout(r, 800));
+
+            dom.emptyState.classList.add('hidden');
+            dom.resultsArea.classList.remove('hidden');
+            renderResults();
+
+            // Reset Button
+            dom.btnText.textContent = 'Analyze';
+            dom.loader.classList.add('hidden');
+            dom.submitBtn.disabled = false;
+        });
+
+        const renderResults = () => {
+            // Hide all sections first
+            [dom.thumbResults, dom.videoResults, dom.audioResults].forEach(el => el.classList.add('hidden'));
+
+            if (state.currentTab === 'thumbnail') {
+                dom.thumbResults.classList.remove('hidden');
+                generateThumbnails(state.videoId);
+            } else if (state.currentTab === 'video') {
+                dom.videoResults.classList.remove('hidden');
+                generateVideoList(state.videoId);
+            } else {
+                dom.audioResults.classList.remove('hidden');
+                generateAudioList(state.videoId);
+            }
+            
+            // Animation
+            gsap.fromTo('.result-section:not(.hidden)', {opacity: 0, y: 20}, {opacity: 1, y: 0, duration: 0.5});
+        };
+
+        // 6. THUMBNAIL GENERATOR (Updated with Crop Logic)
+        const generateThumbnails = (vidId) => {
+            dom.thumbsGrid.innerHTML = '';
+            const qualities = [
+                { label: 'Max HD (1080p)', res: 'maxresdefault.jpg' },
+                { label: 'Standard (720p)', res: 'sddefault.jpg' },
+                { label: 'High (480p)', res: 'hqdefault.jpg' },
+                { label: 'Medium (360p)', res: 'mqdefault.jpg' }
+            ];
+
+            const baseUrl = window.location.href.split(/[?#]/)[0];
+
+            qualities.forEach(q => {
+                const imgUrl = `https://img.youtube.com/vi/${vidId}/${q.res}`;
+                const secretLink = `${baseUrl}?quality=${q.label.split(' ')[0]}&url=${encodeURIComponent(state.currentUrl)}`;
+
+                const html = `
+                    <div class="glass-panel p-4 flex flex-col gap-3 group hover:border-indigo-500/50 transition-colors">
+                        <div class="relative overflow-hidden rounded-lg aspect-video">
+                            <img src="${imgUrl}" class="w-full h-full object-cover cursor-pointer" onclick="openPreview('${imgUrl}')" onerror="this.parentElement.parentElement.style.display='none'">
+                            <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity pointer-events-none">
+                                <span class="text-white text-sm font-bold"><i class="fa-solid fa-expand"></i> Preview</span>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <h4 class="font-bold text-white">${q.label}</h4>
+                        </div>
+                        
+                        <!-- Actions -->
+                        <div class="grid grid-cols-2 gap-2 mt-2">
+                            <button onclick="initDownload('${imgUrl}', '${vidId}-${q.res}')" class="btn-pro py-2 rounded-lg text-xs font-bold text-white">
+                                <i class="fa-solid fa-download mr-1"></i> Original
+                            </button>
+                             <button onclick="copyLink('${secretLink}')" class="bg-gray-700 hover:bg-gray-600 py-2 rounded-lg text-xs font-bold text-white transition-colors">
+                                <i class="fa-solid fa-link mr-1"></i> Link
+                            </button>
+                        </div>
+                        
+                        <!-- New Crop Features -->
+                        <div class="border-t border-white/10 pt-3 mt-1">
+                            <p class="text-[10px] text-gray-500 uppercase font-bold mb-2">Crop & Download</p>
+                            <div class="flex gap-2">
+                                <button onclick="cropAndDownload('${imgUrl}', 1)" class="crop-btn flex-1 py-1 rounded text-[10px] text-gray-300">
+                                    <i class="fa-brands fa-instagram"></i> 1:1
+                                </button>
+                                <button onclick="cropAndDownload('${imgUrl}', 9/16)" class="crop-btn flex-1 py-1 rounded text-[10px] text-gray-300">
+                                    <i class="fa-solid fa-mobile-screen"></i> 9:16
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                dom.thumbsGrid.innerHTML += html;
+            });
+        };
+
+        // 7. VIDEO & AUDIO LIST GENERATOR
+        // Note: Since we don't have a backend, we use a trusted external handler logic via window.open
+        const generateVideoList = (vidId) => {
+            const thumb = `https://img.youtube.com/vi/${vidId}/mqdefault.jpg`;
+            dom.vidMeta.innerHTML = `<img src="${thumb}" class="w-32 rounded-lg shadow-lg border border-white/10"><p class="text-gray-400 text-sm">Select quality to download</p>`;
+            
+            dom.videoList.innerHTML = `
+                <div class="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5 hover:bg-white/10 transition">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-red-500/20 text-red-400 p-2 rounded text-lg"><i class="fa-solid fa-film"></i></div>
+                        <div><div class="font-bold text-white">1080p Full HD</div><div class="text-xs text-gray-500">MP4 • High Quality</div></div>
+                    </div>
+                    <button onclick="externalDownload('${vidId}', '1080')" class="btn-pro px-4 py-2 rounded-lg text-sm font-bold text-white">Download</button>
+                </div>
+                <div class="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5 hover:bg-white/10 transition">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-red-500/20 text-red-400 p-2 rounded text-lg"><i class="fa-solid fa-video"></i></div>
+                        <div><div class="font-bold text-white">720p HD</div><div class="text-xs text-gray-500">MP4 • Good Quality</div></div>
+                    </div>
+                    <button onclick="externalDownload('${vidId}', '720')" class="btn-pro px-4 py-2 rounded-lg text-sm font-bold text-white">Download</button>
+                </div>
+                <div class="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5 hover:bg-white/10 transition">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-red-500/20 text-red-400 p-2 rounded text-lg"><i class="fa-solid fa-video"></i></div>
+                        <div><div class="font-bold text-white">360p</div><div class="text-xs text-gray-500">MP4 • Data Saver</div></div>
+                    </div>
+                    <button onclick="externalDownload('${vidId}', '360')" class="btn-pro px-4 py-2 rounded-lg text-sm font-bold text-white">Download</button>
+                </div>
+            `;
+        };
+
+        const generateAudioList = (vidId) => {
+            const thumb = `https://img.youtube.com/vi/${vidId}/mqdefault.jpg`;
+            dom.audMeta.innerHTML = `<img src="${thumb}" class="w-32 rounded-lg shadow-lg border border-white/10"><p class="text-gray-400 text-sm">Convert to Audio</p>`;
+            
+            dom.audioList.innerHTML = `
+                <div class="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5 hover:bg-white/10 transition">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-indigo-500/20 text-indigo-400 p-2 rounded text-lg"><i class="fa-solid fa-music"></i></div>
+                        <div><div class="font-bold text-white">MP3 High</div><div class="text-xs text-gray-500">320kbps • Crystal Clear</div></div>
+                    </div>
+                    <button onclick="externalDownload('${vidId}', 'mp3')" class="btn-pro px-4 py-2 rounded-lg text-sm font-bold text-white">Convert</button>
+                </div>
+                <div class="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5 hover:bg-white/10 transition">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-indigo-500/20 text-indigo-400 p-2 rounded text-lg"><i class="fa-solid fa-music"></i></div>
+                        <div><div class="font-bold text-white">MP3 Standard</div><div class="text-xs text-gray-500">128kbps • Small Size</div></div>
+                    </div>
+                    <button onclick="externalDownload('${vidId}', 'mp3_low')" class="btn-pro px-4 py-2 rounded-lg text-sm font-bold text-white">Convert</button>
+                </div>
+            `;
+        };
+
+        // 8. ACTION HANDLERS
+        
+        // CROP LOGIC (Canvas)
+        window.cropAndDownload = (imgSrc, ratio) => {
+            const canvas = dom.hiddenCanvas;
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            img.crossOrigin = "anonymous"; // Essential for Canvas
+            img.src = imgSrc;
+            
+            showToast('Preparing Crop...', 'success');
+
+            img.onload = () => {
+                const srcWidth = img.naturalWidth;
+                const srcHeight = img.naturalHeight;
+                let targetWidth, targetHeight, sx, sy, sWidth, sHeight;
+
+                // Calculate Crop
+                if (ratio === 1) { // Square
+                    const size = Math.min(srcWidth, srcHeight);
+                    sx = (srcWidth - size) / 2;
+                    sy = (srcHeight - size) / 2;
+                    sWidth = size; sHeight = size;
+                    targetWidth = 1000; targetHeight = 1000;
+                } else { // 9:16 (Story)
+                    // Logic to center crop 9:16
+                    const idealHeight = srcWidth * (16/9);
+                    if (idealHeight <= srcHeight) {
+                        sWidth = srcWidth;
+                        sHeight = idealHeight;
+                        sx = 0;
+                        sy = (srcHeight - idealHeight) / 2;
+                    } else {
+                        sWidth = srcHeight * (9/16);
+                        sHeight = srcHeight;
+                        sx = (srcWidth - sWidth) / 2;
+                        sy = 0;
+                    }
+                    targetWidth = 1080; targetHeight = 1920;
+                }
+
+                canvas.width = targetWidth;
+                canvas.height = targetHeight;
+                ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, targetWidth, targetHeight);
+
+                // Trigger Download logic via Blob
+                canvas.toBlob((blob) => {
+                    const url = URL.createObjectURL(blob);
+                    state.pendingDownload = { url: url, name: `cropped-${state.videoId}.png`, isBlob: true };
+                    startAdTimer(); // Use existing ad timer
+                });
+            };
+            img.onerror = () => showToast('CORS Error: Cannot crop this image', 'error');
+        };
+
+        // Standard Download
+        window.initDownload = (url, name) => {
+            state.pendingDownload = { url, name, isBlob: false };
+            startAdTimer();
+        };
+
+        // External Download (Video/Audio)
+        window.externalDownload = (id, type) => {
+            // We use the Ad Timer for these too, then redirect
+            state.pendingDownload = { type: 'external', id, quality: type };
+            startAdTimer();
+        };
+
+        window.copyLink = async (text) => {
+            try { await navigator.clipboard.writeText(text); showToast('Link Copied to Clipboard'); }
+            catch(e) { showToast('Failed to copy', 'error'); }
+        };
+
+        window.openPreview = (src) => {
+            dom.previewImg.src = src;
+            dom.previewModal.classList.remove('hidden');
+        };
+        document.getElementById('close-preview').onclick = () => dom.previewModal.classList.add('hidden');
+
+        // 9. AD TIMER & EXECUTION LOGIC (PRESERVED)
+        const adModal = document.getElementById('ad-modal-overlay');
+        const timerCount = document.getElementById('timer-count');
+        const adBtn = document.getElementById('ad-timer-btn');
+        const closeIcon = document.getElementById('close-icon');
+        let interval;
+
+        const startAdTimer = () => {
+            adModal.classList.remove('hidden');
+            let timeLeft = 5;
+            timerCount.innerText = timeLeft;
+            timerCount.classList.remove('hidden');
+            closeIcon.classList.add('hidden');
+            
+            clearInterval(interval);
+            interval = setInterval(() => {
+                timeLeft--;
+                timerCount.innerText = timeLeft;
+                if(timeLeft <= 0) {
+                    clearInterval(interval);
+                    timerCount.classList.add('hidden');
+                    closeIcon.classList.remove('hidden');
+                    adBtn.style.background = '#22c55e'; // Green
+                    adBtn.style.cursor = 'pointer';
+                }
+            }, 1000);
+        };
+
+        adBtn.addEventListener('click', (e) => {
+            if(!closeIcon.classList.contains('hidden')) {
+                adModal.classList.add('hidden');
+                executePendingAction();
+            }
+        });
+
+        const executePendingAction = () => {
+            const p = state.pendingDownload;
+            if (!p) return;
+
+            if (p.type === 'external') {
+                // Redirect to a trusted multi-downloader helper
+                // Using ssyoutube method or similar deep link structure
+                if(p.quality === 'mp3' || p.quality === 'mp3_low') {
+                    // Audio strategy
+                    window.open(`https://y2mate.com/youtube/${p.id}`, '_blank'); 
+                } else {
+                    // Video strategy
+                    window.open(`https://ssyoutube.com/watch?v=${p.id}`, '_blank');
+                }
+            } else if (p.isBlob) {
+                // Canvas download
+                const a = document.createElement('a');
+                a.href = p.url; a.download = p.name;
+                document.body.appendChild(a); a.click(); a.remove();
+            } else {
+                // Standard Image download
+                fetch(p.url).then(res => res.blob()).then(blob => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url; a.download = p.name;
+                    document.body.appendChild(a); a.click(); a.remove();
+                }).catch(() => window.open(p.url, '_blank')); // Fallback
+            }
+            state.pendingDownload = null;
+        };
+
+        // 10. DIRECT SECRET DOWNLOAD CHECKER (Preserved)
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('quality') && params.get('url')) {
+            document.getElementById('main-content').classList.add('hidden');
+            document.getElementById('direct-mode-ui').classList.remove('hidden');
+            document.getElementById('direct-mode-ui').classList.add('flex');
+            document.getElementById('direct-home-link').href = window.location.origin + window.location.pathname;
+
+            const q = params.get('quality');
+            const vId = extractVideoID(params.get('url'));
+            const map = { '1080P': 'maxresdefault.jpg', '720P': 'sddefault.jpg', '480P': 'hqdefault.jpg' };
+            const res = map[q] || 'sddefault.jpg';
+            
+            if(vId) {
+                fetch(`https://img.youtube.com/vi/${vId}/${res}`).then(r => r.blob()).then(blob => {
+                    const u = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = u; a.download = `${vId}-${q}.jpg`;
+                    document.body.appendChild(a); a.click();
+                    
+                    document.getElementById('direct-status').innerText = "Download Complete";
+                    document.getElementById('direct-icon').className = "fa-solid fa-circle-check text-green-500 text-5xl mb-4";
+                });
+            }
+        }
+
+        // 11. SECURITY LOCKS (Preserved)
+        document.addEventListener('contextmenu', e => e.target.id !== 'url-input' && e.preventDefault());
+        document.addEventListener('keydown', e => {
+            if((e.ctrlKey || e.metaKey) && ['u','s','p','i'].includes(e.key.toLowerCase())) e.preventDefault();
+        });
+    });
+    </script>
+</body>
+  </html>
